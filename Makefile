@@ -58,7 +58,7 @@ endif
 # Convenience symlink for tests expecting bin/presign (Linux)
 TEST_LINK = $(BINDIR)/presign
 
-.PHONY: all clean test install
+.PHONY: all clean test install check dist distcheck
 
 all: $(TARGET) symlink-for-tests
 
@@ -83,11 +83,38 @@ clean:
 	rm -rf $(BUILDDIR) $(BINDIR)
 
 test: all
-	@echo "Running basic tests..."
-	@echo "Test 1: Help message"
-	@./$(TEST_LINK) || true
-	@echo "Test 2: Invalid arguments"
-	@./$(TEST_LINK) invalid args || true
+	@echo "Running fuzz test suite: test/test-suite.sh"
+	@./test/test-suite.sh
+
+# "check" is the conventional GNU/make/autotools target name for running
+# the project's test-suite. Provide it as an alias to the existing `test`
+# target so CI systems that invoke `make check` will run our tests.
+check: test
+
+# Create a source distribution tarball. When a git repository is present we
+# prefer `git archive` (keeps tar deterministic for tagged commits). If no
+# .git directory exists we fall back to a simple `tar` of the common files.
+ifneq ($(wildcard .git),)
+dist:
+	@echo "Creating distribution tarball presign-$(GITVER).tar.gz (via git archive)"
+	@git archive --format=tar --prefix=presign-$(GITVER)/ HEAD | gzip > presign-$(GITVER).tar.gz
+else
+dist:
+	@echo "Creating distribution tarball presign-$(GITVER).tar.gz (via tar fallback)"
+	@tar -czf presign-$(GITVER).tar.gz --transform "s,^[./]*,presign-$(GITVER)/," \
+		src README.md VERSION presign.1 Makefile test || true
+endif
+
+# "distcheck" is a common autotools target: build a distribution tarball,
+# unpack it in a fresh directory, build from that tree and run the test
+# suite there. This provides reasonable assurance that the tarball contains
+# everything needed to build and test on a clean system.
+distcheck: dist
+	@echo "Running distcheck: building and testing from the generated tarball"
+	@rm -rf $(BUILDDIR)/distcheck || true
+	@mkdir -p $(BUILDDIR)/distcheck
+	@tar -xzf presign-$(GITVER).tar.gz -C $(BUILDDIR)/distcheck
+	@cd $(BUILDDIR)/distcheck/presign-$(GITVER) && $(MAKE) && $(MAKE) check
 
 install: all
 	mkdir -p /usr/local/bin
