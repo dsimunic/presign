@@ -20,8 +20,9 @@ LDFLAGS = -lssl -lcrypto
 # Platform-specific flags
 ifeq ($(UNAME), Darwin)
     # macOS with Homebrew
-    CFLAGS += -I/opt/homebrew/include
-    LDFLAGS += -L/opt/homebrew/lib
+    OPENSSL_PREFIX ?= /opt/homebrew
+    CFLAGS += -I$(OPENSSL_PREFIX)/include
+    LDFLAGS += -L$(OPENSSL_PREFIX)/lib
 endif
 ifeq ($(UNAME), Linux)
     # Linux - need _GNU_SOURCE for strptime/timegm
