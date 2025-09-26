@@ -57,11 +57,8 @@ run_fuzz_test() {
     echo -n "Testing: $test_name ... "
 
     # Run the command and capture both exit code and any crash signals
-    if timeout 5s "$PRESIGN_BIN" "${args[@]}" >/dev/null 2>&1; then
-        exit_code=$?
-    else
-        exit_code=$?
-    fi
+    timeout 5s "$PRESIGN_BIN" "${args[@]}" >/dev/null 2>&1
+    exit_code=$?
 
     # Check if program crashed (segfault = 139, timeout = 124)
     if [ $exit_code -eq 124 ]; then
