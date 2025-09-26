@@ -116,10 +116,14 @@ $(BUILDDIR):
 $(BINDIR):
 	mkdir -p $(BINDIR)
 
-symlink-for-tests: $(TARGET)
 
 clean:
 	rm -rf $(BUILDDIR) $(BINDIR)
+
+symlink-for-tests: $(TARGET)
+ifeq ($(UNAME), Linux)
+	@if [ ! -e $(TEST_LINK) ]; then ln -s $(notdir $(TARGET)) $(TEST_LINK); fi
+endif
 
 test: all
 	@echo "Running fuzz test suite: test/test-suite.sh"
