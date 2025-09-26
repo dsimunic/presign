@@ -69,6 +69,8 @@ jobs:
           brew update || true
           # prefer openssl@3, fall back to openssl
           brew install openssl@3 || brew install openssl
+          # Install coreutils for GNU compatibility
+          brew install coreutils
           OPENSSL_PREFIX=$(brew --prefix openssl@3 2>/dev/null || brew --prefix openssl)
           echo "OPENSSL_PREFIX=${OPENSSL_PREFIX}" >> $GITHUB_ENV
           echo "LDFLAGS=-L${OPENSSL_PREFIX}/lib" >> $GITHUB_ENV
@@ -114,6 +116,8 @@ jobs:
           brew update || true
           # prefer openssl@3, fall back to openssl
           brew install openssl@3 || brew install openssl
+          # Install coreutils for GNU compatibility
+          brew install coreutils
           OPENSSL_PREFIX=$(brew --prefix openssl@3 2>/dev/null || brew --prefix openssl)
           echo "OPENSSL_PREFIX=${OPENSSL_PREFIX}" >> $GITHUB_ENV
           echo "LDFLAGS=-L${OPENSSL_PREFIX}/lib" >> $GITHUB_ENV

@@ -1,5 +1,9 @@
 CC = gcc
 
+# Default target
+.PHONY: all
+.DEFAULT_GOAL := all
+
 # Detect operating system / architecture
 UNAME := $(shell uname)
 ARCH  := $(shell uname -m)
@@ -13,20 +17,57 @@ else
   ARCH_NORMALIZED := $(ARCH)
 endif
 
+# Crypto backend selection
+CRYPTO_BACKEND ?= openssl
+STATIC_LINK ?= 0
+
 # Base flags
-CFLAGS = -Wall -Wextra -Werror -std=c99 -O2
-LDFLAGS = -lssl -lcrypto
+OPTIMIZATION ?= -O2
+CFLAGS = -Wall -Wextra -Werror -std=c99 $(OPTIMIZATION)
+
+# Crypto backend specific flags
+ifeq ($(CRYPTO_BACKEND), openssl)
+    ifeq ($(STATIC_LINK), 1)
+        LDFLAGS = -static -lssl -lcrypto
+    else
+        LDFLAGS = -lssl -lcrypto
+    endif
+    CFLAGS += -DUSE_OPENSSL
+else ifeq ($(CRYPTO_BACKEND), mbedtls)
+    ifeq ($(STATIC_LINK), 1)
+        ifeq ($(UNAME), Darwin)
+            MBEDTLS_LIB_PATH = /opt/homebrew/lib
+        else
+            MBEDTLS_LIB_PATH = /usr/lib
+        endif
+        LDFLAGS = $(MBEDTLS_LIB_PATH)/libmbedtls.a $(MBEDTLS_LIB_PATH)/libmbedcrypto.a
+    else
+        LDFLAGS = -lmbedtls -lmbedcrypto
+    endif
+    CFLAGS += -DUSE_MBEDTLS
+endif
 
 # Platform-specific flags
 ifeq ($(UNAME), Darwin)
     # macOS with Homebrew
-    OPENSSL_PREFIX ?= /opt/homebrew
-    CFLAGS += -I$(OPENSSL_PREFIX)/include
-    LDFLAGS += -L$(OPENSSL_PREFIX)/lib
+    ifeq ($(CRYPTO_BACKEND), openssl)
+        OPENSSL_PREFIX ?= /opt/homebrew
+        CFLAGS += -I$(OPENSSL_PREFIX)/include
+        LDFLAGS += -L$(OPENSSL_PREFIX)/lib
+    else ifeq ($(CRYPTO_BACKEND), mbedtls)
+        MBEDTLS_PREFIX ?= /opt/homebrew
+        CFLAGS += -I$(MBEDTLS_PREFIX)/include
+        LDFLAGS += -L$(MBEDTLS_PREFIX)/lib
+    endif
 endif
 ifeq ($(UNAME), Linux)
     # Linux - need _GNU_SOURCE for strptime/timegm
     CFLAGS += -D_GNU_SOURCE
+    ifeq ($(CRYPTO_BACKEND), mbedtls)
+        # On Linux, mbedTLS headers are in /usr/include/mbedtls
+        CFLAGS += -I/usr/include
+        LDFLAGS += -L/usr/lib
+    endif
 endif
 
 SRCDIR = src
@@ -59,17 +100,12 @@ endif
 # Convenience symlink for tests expecting bin/presign (Linux)
 TEST_LINK = $(BINDIR)/presign
 
-.PHONY: all clean test install check dist distcheck
+.PHONY: clean test install check dist distcheck
 
 all: $(TARGET) symlink-for-tests
 
 $(TARGET): $(OBJECTS) | $(BINDIR)
 	$(CC) $(OBJECTS) -o $@ $(LDFLAGS)
-
-symlink-for-tests: $(TARGET)
-ifeq ($(UNAME), Linux)
-	@if [ ! -e $(TEST_LINK) ]; then ln -s $(notdir $(TARGET)) $(TEST_LINK); fi
-endif
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -79,6 +115,8 @@ $(BUILDDIR):
 
 $(BINDIR):
 	mkdir -p $(BINDIR)
+
+symlink-for-tests: $(TARGET)
 
 clean:
 	rm -rf $(BUILDDIR) $(BINDIR)

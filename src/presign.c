@@ -3,11 +3,17 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
+#include <limits.h>
+#include "version.h"
+
+#ifdef USE_OPENSSL
 #include <openssl/hmac.h>
 #include <openssl/sha.h>
 #include <openssl/evp.h>
-#include <limits.h>
-#include "version.h"
+#elif defined(USE_MBEDTLS)
+#include <mbedtls/md.h>
+#include <mbedtls/sha256.h>
+#endif
 
 #define MAX_URL_LEN 4096
 #define MAX_PATH_LEN 2048
@@ -90,11 +96,17 @@ void to_hex(const unsigned char *data, int len, char *hex) {
 }
 
 void hmac_sha256(const char *key, int key_len, const char *data, int data_len, unsigned char *result) {
+#ifdef USE_OPENSSL
     unsigned int result_len;
     HMAC(EVP_sha256(), key, key_len, (unsigned char*)data, data_len, result, &result_len);
+#elif defined(USE_MBEDTLS)
+    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    mbedtls_md_hmac(md_info, (const unsigned char*)key, key_len, (const unsigned char*)data, data_len, result);
+#endif
 }
 
 void sha256_hash(const char *data, int data_len, unsigned char *result) {
+#ifdef USE_OPENSSL
     EVP_MD_CTX *ctx = EVP_MD_CTX_new();
     if (!ctx) {
         fprintf(stderr, "Error: Failed to create EVP digest context\n");
@@ -120,6 +132,9 @@ void sha256_hash(const char *data, int data_len, unsigned char *result) {
     }
 
     EVP_MD_CTX_free(ctx);
+#elif defined(USE_MBEDTLS)
+    mbedtls_sha256((const unsigned char*)data, data_len, result, 0);
+#endif
 }
 
 void derive_signing_key(const char *secret, const char *date, const char *region, const char *service, unsigned char *signing_key) {
