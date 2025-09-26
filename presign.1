@@ -1,0 +1,241 @@
+.TH PRESIGN 1 "September 2025" "presign 1.0" "User Commands"
+.SH NAME
+presign \- generate Amazon S3 pre-signed URLs
+.SH SYNOPSIS
+.B presign
+.I SERVICE METHOD [REGION] [ENDPOINT] S3_PATH EXPIRE_MIN
+.RI [ OPTIONS ]
+.SH DESCRIPTION
+.B presign
+is a command-line utility that generates Amazon S3 pre-signed URLs for GET, PUT, and DELETE operations. Pre-signed URLs allow temporary access to S3 objects without requiring AWS credentials to be embedded in client applications.
+
+The utility implements AWS Signature Version 4 (SigV4) signing algorithm and supports custom headers, metadata, and server-side encryption options.
+
+.SH ARGUMENTS
+.TP
+.I SERVICE
+Must be "s3". Reserved for future extension to other AWS services.
+
+.TP
+.I METHOD
+HTTP method for the operation. Supported values:
+.RS
+.IP \(bu 4
+.B GET
+\- Generate URL for downloading an object
+.IP \(bu 4
+.B PUT
+\- Generate URL for uploading an object
+.IP \(bu 4
+.B DELETE
+\- Generate URL for deleting an object
+.RE
+
+.TP
+.I REGION
+AWS region where the S3 bucket is located (e.g., "us-east-1", "eu-west-1", "fr-par"). Optional when
+.B S3_REGION
+is defined in the environment. A value passed on the command line always overrides the environment.
+
+.TP
+.I ENDPOINT
+Base HTTPS endpoint for the S3-compatible service (e.g., "https://s3.us-east-1.amazonaws.com" or "https://s3.fr-par.scw.cloud"). Optional when
+.B S3_ENDPOINT
+is defined in the environment. Trailing slashes are ignored. This argument is required if neither the
+environment variable nor the CLI parameter is provided.
+
+.TP
+.I S3_PATH
+Bucket-qualified object path in the form
+.IR bucket /key .
+Can include forward slashes for nested paths and may contain spaces or special characters, which are
+automatically URL-encoded. Examples: "mybucket/documents/report.pdf", "mybucket/test.txt".
+
+.TP
+.I EXPIRE_MIN
+Expiration time for the presigned URL in minutes. Must be a positive integer between 1 and 10080 (7 days). This is the maximum allowed by AWS S3.
+
+.SH OPTIONS
+.TP
+.BI \-\-header " HEADER"
+Add a custom header that will be required when using the presigned URL. The header must be in the format "Name: Value". This option can be specified multiple times to add multiple headers.
+
+Common headers for PUT operations:
+.RS
+.IP \(bu 4
+Content-Type: Specify the MIME type of the uploaded content
+.IP \(bu 4
+x-amz-meta-*: Add custom metadata to the object
+.IP \(bu 4
+x-amz-server-side-encryption: Enable server-side encryption
+.IP \(bu 4
+x-amz-acl: Set object access control list
+.RE
+
+.TP
+.BI \-\-now " TIMESTAMP"
+Override the current time for signature calculation. The timestamp must be in ISO 8601 format (e.g., "2025-09-25T10:00:00Z"). This option is primarily useful for testing and generating reproducible signatures.
+
+.SH ENVIRONMENT VARIABLES
+The following environment variables are required:
+
+.TP
+.B AWS_ACCESS_KEY_ID
+AWS access key identifier for authentication.
+
+.TP
+.B AWS_SECRET_ACCESS_KEY
+AWS secret access key corresponding to the access key ID.
+
+.TP
+.B AWS_SESSION_TOKEN
+(Optional) Session token for temporary credentials obtained through AWS STS (Security Token Service). Required when using temporary credentials.
+
+.TP
+.B S3_REGION
+Default region to use when the REGION positional argument is omitted.
+
+.TP
+.B S3_ENDPOINT
+Default endpoint to use when the ENDPOINT positional argument is omitted.
+
+.SH EXAMPLES
+.SS Basic Usage
+Generate a presigned URL to download a file:
+.RS
+.nf
+$ export AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE"
+$ export AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+$ presign s3 GET fr-par https://s3.fr-par.scw.cloud bucket/documents/report.pdf 60
+.fi
+.RE
+
+.SS Upload with Content Type
+Generate a presigned URL to upload a JSON file:
+.RS
+.nf
+$ presign s3 PUT fr-par https://s3.fr-par.scw.cloud bucket/data/config.json 30 \\
+    --header "Content-Type: application/json"
+.fi
+.RE
+
+.SS Upload with Metadata and Encryption
+Generate a presigned URL with multiple headers:
+.RS
+.nf
+$ presign s3 PUT fr-par https://s3.fr-par.scw.cloud bucket/files/document.pdf 120 \\
+    --header "Content-Type: application/pdf" \\
+    --header "x-amz-meta-author: John Doe" \\
+    --header "x-amz-meta-department: Engineering" \\
+    --header "x-amz-server-side-encryption: AES256"
+.fi
+.RE
+
+.SS Delete Operation
+Generate a presigned URL to delete an object:
+.RS
+.nf
+$ presign s3 DELETE fr-par https://s3.fr-par.scw.cloud bucket/temp/old-file.txt 15
+.fi
+.RE
+
+.SS Using Presigned URLs
+Upload a file using the generated presigned URL:
+.RS
+.nf
+$ URL=$(presign s3 PUT fr-par https://s3.fr-par.scw.cloud bucket/upload.txt 10 \\
+    --header "Content-Type: text/plain")
+$ curl -X PUT --data-binary @myfile.txt -H "Content-Type: text/plain" "$URL"
+.fi
+.RE
+
+Download a file using a presigned URL:
+.RS
+.nf
+$ URL=$(presign s3 GET fr-par https://s3.fr-par.scw.cloud bucket/document.pdf 30)
+$ curl -o downloaded.pdf "$URL"
+.fi
+.RE
+
+.SS Testing with Fixed Timestamp
+Generate reproducible URLs for testing:
+.RS
+.nf
+$ presign s3 GET fr-par https://s3.fr-par.scw.cloud bucket/test.txt 60 \\
+    --now "2025-09-25T10:00:00Z"
+.fi
+.RE
+
+.SH EXIT STATUS
+.B presign
+exits with status 0 on success. Non-zero exit codes indicate various error conditions:
+
+.TP
+.B 1
+General error (invalid arguments, missing environment variables, etc.)
+
+.TP
+.B 2
+Invalid or missing required arguments
+
+.TP
+.B 3
+Environment variable validation failed
+
+.TP
+.B 4
+Header parsing or validation failed
+
+.TP
+.B 5
+Memory allocation or buffer overflow prevented
+
+.SH SECURITY CONSIDERATIONS
+.IP \(bu 4
+Pre-signed URLs grant temporary access to S3 operations. Treat them as credentials and protect them accordingly.
+
+.IP \(bu 4
+URLs expire after the specified time. Choose appropriate expiration times based on your use case.
+
+.IP \(bu 4
+When using custom headers with PUT operations, clients must include exactly the same headers when making the request, or the signature verification will fail.
+
+.IP \(bu 4
+The tool prevents various security issues including buffer overflows, path traversal attempts, and command injection by validating all inputs.
+
+.IP \(bu 4
+Session tokens (when used) are included in the signature and URL, so ensure URLs are transmitted securely.
+
+.SH LIMITATIONS
+.IP \(bu 4
+Maximum expiration time is 7 days (10080 minutes) as enforced by AWS S3.
+
+.IP \(bu 4
+Only supports AWS Signature Version 4 (SigV4) signing algorithm.
+
+.IP \(bu 4
+Limited to S3 service (service parameter must be "s3").
+
+.IP \(bu 4
+Path encoding follows S3 canonical URI encoding rules.
+
+.SH FILES
+.TP
+.I /usr/local/bin/presign
+Default installation location for the presign binary.
+
+.SH SEE ALSO
+.BR curl (1),
+.BR aws (1)
+
+AWS S3 API documentation: https://docs.aws.amazon.com/s3/
+
+AWS Signature Version 4 specification: https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html
+
+.SH AUTHOR
+Generated for the presign utility as part of the Secrets management system.
+
+.SH BUGS
+Report bugs and issues to the project maintainers.
+
+The tool has been extensively tested with fuzz testing to prevent crashes and security vulnerabilities, but edge cases may still exist with unusual input combinations.

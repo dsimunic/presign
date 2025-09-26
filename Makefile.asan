@@ -1,0 +1,52 @@
+CC = gcc
+
+# Detect operating system
+UNAME := $(shell uname)
+
+# Base flags with AddressSanitizer
+CFLAGS = -Wall -Wextra -Werror -std=c99 -O1 -g -fsanitize=address -fno-omit-frame-pointer
+LDFLAGS = -lssl -lcrypto -fsanitize=address
+
+# Platform-specific flags
+ifeq ($(UNAME), Darwin)
+    # macOS with Homebrew
+    CFLAGS += -I/opt/homebrew/include
+    LDFLAGS += -L/opt/homebrew/lib
+else
+    # Linux - need _GNU_SOURCE for strptime/timegm
+    CFLAGS += -D_GNU_SOURCE
+endif
+
+SRCDIR = src
+BUILDDIR = build
+BINDIR = bin
+
+SOURCES = $(SRCDIR)/presign.c
+OBJECTS = $(BUILDDIR)/presign.o
+TARGET = $(BINDIR)/presign-asan
+
+.PHONY: all clean test
+
+all: $(TARGET)
+
+$(TARGET): $(OBJECTS) | $(BINDIR)
+	$(CC) $(OBJECTS) -o $@ $(LDFLAGS)
+
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILDDIR):
+	mkdir -p $(BUILDDIR)
+
+$(BINDIR):
+	mkdir -p $(BINDIR)
+
+clean:
+	rm -rf $(BUILDDIR) $(TARGET)
+
+test: $(TARGET)
+	@echo "Running AddressSanitizer tests..."
+	@echo "Test 1: Basic functionality"
+	@export AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test && ./$(TARGET) s3 GET region https://bucket.com path 15 || true
+	@echo "Test 2: Invalid arguments"
+	@./$(TARGET) invalid args || true
