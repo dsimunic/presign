@@ -64,13 +64,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Install coreutils via Homebrew
+        run: |
+          brew update || true
+          # Install coreutils for GNU compatibility
+          brew install coreutils
       - name: Install OpenSSL via Homebrew
         run: |
           brew update || true
           # prefer openssl@3, fall back to openssl
           brew install openssl@3 || brew install openssl
-          # Install coreutils for GNU compatibility
-          brew install coreutils
           OPENSSL_PREFIX=$(brew --prefix openssl@3 2>/dev/null || brew --prefix openssl)
           echo "OPENSSL_PREFIX=${OPENSSL_PREFIX}" >> $GITHUB_ENV
           echo "LDFLAGS=-L${OPENSSL_PREFIX}/lib" >> $GITHUB_ENV
@@ -111,13 +114,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Install coreutils via Homebrew
+        run: |
+          brew update || true
+          # Install coreutils for GNU compatibility
+          brew install coreutils
       - name: Install OpenSSL via Homebrew
         run: |
           brew update || true
           # prefer openssl@3, fall back to openssl
           brew install openssl@3 || brew install openssl
-          # Install coreutils for GNU compatibility
-          brew install coreutils
           OPENSSL_PREFIX=$(brew --prefix openssl@3 2>/dev/null || brew --prefix openssl)
           echo "OPENSSL_PREFIX=${OPENSSL_PREFIX}" >> $GITHUB_ENV
           echo "LDFLAGS=-L${OPENSSL_PREFIX}/lib" >> $GITHUB_ENV
